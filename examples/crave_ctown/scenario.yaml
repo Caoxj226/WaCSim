@@ -176,6 +176,8 @@ time:
   hydraulic_step_seconds: 300
   warmup_steps: 24
   warmup_transition_range_inclusive: [0, 23]
+  score_start_step: 24
+  score_start_semantics: retain_warmup_telemetry_exclude_warmup_from_CRAVE_score
   first_attack_transition: 24
   duration_steps: {min: 5, max: 120, inclusive: true}
   postattack_observation_steps: 100
@@ -282,4 +284,11 @@ review:
     - junction_pressure_below_20_m_is_diagnostic_minimum_pressure_0_m_is_hard
     - lock_scenario_and_regenerate_formal_calibration_lock
   independent_phase1_commit_required_before_formal_lock: true
+review_addenda:
+  - date: 2026-11-09
+    authority: user_authorized_after_CRAVE_score_trace_compatibility_check
+    decision: retain_warmup_telemetry_but_exclude_steps_0_through_23_from_CRAVE_score
+    score_start_step: 24
+    preserved_CRAVE_rule: same_step_alarm_and_hazard_is_not_prehazard_alarm
+    consequence: prior_calibration_lock_is_superseded_and_must_not_be_used_for_formal_replay
 review_required: []
