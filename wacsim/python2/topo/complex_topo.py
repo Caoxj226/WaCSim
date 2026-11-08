@@ -285,6 +285,20 @@ class ComplexTopo(Topo):
             for attack in self.data['network_attacks']:
                 node = net.get(attack['name'][0:9])
                 node.cmd('route add default gw {ip}'.format(ip=attack['gateway_ip']))
+                if 'crave_masker' in attack:
+                    # This route is a CTown-Mininet wiring detail: it puts the
+                    # reviewed PLC5->PLC9 read and its reply through the local
+                    # attacker namespace without relying on best-effort ARP
+                    # cache poisoning. NAT makes the reply return through it.
+                    target = next(p for p in self.data['plcs'] if p['name'] == attack['target'])
+                    server = next(p for p in self.data['plcs'] if p['name'] == attack['server'])
+                    node.cmd('sysctl -w net.ipv4.ip_forward=1')
+                    node.cmd('iptables -t nat -A POSTROUTING -o {interface} -d {server} '
+                             '-p tcp --dport {port} -j MASQUERADE'.format(
+                                 interface=attack['interface'], server=server['public_ip'],
+                                 port=self.cpppo_port))
+                    net.get(target['name']).cmd('ip route replace {server}/32 via {attacker}'.format(
+                        server=server['public_ip'], attacker=attack['local_ip']))
 
     def setup_network_for_node(self, net, node_data, provider_router):
         """

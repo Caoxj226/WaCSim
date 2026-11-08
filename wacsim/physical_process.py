@@ -1,5 +1,6 @@
 import argparse
 import csv
+import json
 import os
 import signal
 import logging
@@ -88,6 +89,8 @@ class PhysicalPlant:
         list_header.extend(self.create_link_header(self.valve_list))
 
         list_header.extend(self.create_attack_header())
+        if 'crave_ctown_runtime' in self.data:
+            list_header.append('hydraulic_time_seconds')
 
         self.results_list = []
         self.results_list.append(list_header)
@@ -332,6 +335,8 @@ class PhysicalPlant:
             for network_attack in self.data["network_attacks"]:
                 result.append(network_attack['name'])
 
+        result.extend(a['name'] for a in self.data.get('crave_device_attacks', []))
+
         return result
         
     def register_initial_results(self):
@@ -350,7 +355,17 @@ class PhysicalPlant:
                 en.getlinkvalue(ph=self.proj, index=idx, property=en.SETTING)  # Pump speed
             ])
 
+        if 'crave_ctown_runtime' in self.data:
+            for valve in self.valve_list:
+                idx = en.getlinkindex(ph=self.proj, id=valve)
+                self.values_list.extend([
+                    en.getlinkvalue(ph=self.proj, index=idx, property=en.FLOW),
+                    en.getlinkvalue(ph=self.proj, index=idx, property=en.STATUS),
+                ])
         self.extend_attacks()
+
+        if 'crave_ctown_runtime' in self.data:
+            self.values_list.append(0)
 
     def register_results(self, results=None):
 
@@ -363,6 +378,8 @@ class PhysicalPlant:
         # epynet current's version includes valves status in pumps
         self.extend_valves(results)
         self.extend_attacks()
+        if 'crave_ctown_runtime' in self.data:
+            self.values_list.append(self.master_time * self.simulation_step)
 
     def extend_tanks(self, results=None):
         for tank in self.tank_list:
@@ -410,6 +427,8 @@ class PhysicalPlant:
         if "network_attacks" in self.data:
             for network_attack in self.data["network_attacks"]:
                 self.values_list.append(self.get_attack_flag(network_attack['name']))
+        for attack in self.data.get('crave_device_attacks', []):
+            self.values_list.append(self.get_attack_flag(attack['name']))
 
     def update_controls(self):
         """Updates all controls in WNTR."""
@@ -424,6 +443,10 @@ class PhysicalPlant:
 
             control['value'] = new_status
             idx = en.getlinkindex(ph=self.proj, id=control['name'])
+            if 'crave_ctown_runtime' in self.data and control['name'] == 'PU10':
+                from wacsim.replay.control import apply_pump_speed
+                apply_pump_speed(en, self.proj, idx, new_status)
+                continue
             if not math.isclose(control['value'], 1) and not math.isclose(control['value'], 0):
                 en.setlinkvalue(ph=self.proj, index=idx, property=en.SETTING, value=control['value'])
             else:
@@ -538,6 +561,11 @@ class PhysicalPlant:
             p_bar.start()
         self.simulate_with_wntr(iteration_limit, p_bar)
         self.finish()
+        if 'crave_ctown_runtime' in self.data:
+            runtime = self.data['crave_ctown_runtime']
+            marker = {'execution_id': runtime['execution_id'], 'run_key': runtime['run_key'],
+                      'completed_steps': self.master_time}
+            (Path(self.data['output_path']) / 'full_run_complete.json').write_text(json.dumps(marker))
 
     def simulate_with_wntr(self, iteration_limit, p_bar):
         self.logger.info("Starting WNTR simulation")
@@ -555,7 +583,9 @@ class PhysicalPlant:
         en.runH(ph=self.proj)
         self.register_initial_results()
         self.results_list.append(self.values_list)
-        tstep = en.nextH(ph=self.proj)
+        crave_timing = 'crave_ctown_runtime' in self.data
+        if not crave_timing:
+            tstep = en.nextH(ph=self.proj)
         for _ in range(iteration_limit):
             # Wait for PLCs
             while not self.get_plcs_ready(1):
@@ -568,14 +598,26 @@ class PhysicalPlant:
             # Update any controls
             self.update_controls()
             current_time = en.runH(ph=self.proj)
-            #Skip intermediate timesteps until we have one that isn't
-            while True:
-                if (current_time) // self.simulation_step > self.master_time:
-                    break
-                else:
+            if crave_timing:
+                if current_time != self.master_time * self.simulation_step:
+                    raise RuntimeError('CTown control/physical clock mismatch')
+                target_time = (self.master_time + 1) * self.simulation_step
+                while current_time < target_time:
                     tstep = en.nextH(ph=self.proj)
+                    if tstep <= 0:
+                        raise RuntimeError('EPANET stopped before the CTown output step')
                     current_time = en.runH(ph=self.proj)
-                    self.logger.debug("Skipping Intermediate Timestep")
+                if current_time != target_time:
+                    raise RuntimeError('EPANET skipped the CTown output step')
+            else:
+                # Preserve the stock WaCSim timing for existing configurations.
+                while True:
+                    if (current_time) // self.simulation_step > self.master_time:
+                        break
+                    else:
+                        tstep = en.nextH(ph=self.proj)
+                        current_time = en.runH(ph=self.proj)
+                        self.logger.debug("Skipping Intermediate Timestep")
             if p_bar:
                 p_bar.update(self.master_time)
             self.master_time += 1
@@ -612,8 +654,9 @@ class PhysicalPlant:
             if 'saving_interval' in self.data and self.master_time != 0 \
                and self.master_time % self.data['saving_interval'] == 0:
                 self.write_results(self.results_list)
-            tstep = en.nextH(ph=self.proj)
-            self.logger.debug(tstep)
+            if not crave_timing:
+                tstep = en.nextH(ph=self.proj)
+                self.logger.debug(tstep)
             self.set_sync(0)
 
         # Close EPANET

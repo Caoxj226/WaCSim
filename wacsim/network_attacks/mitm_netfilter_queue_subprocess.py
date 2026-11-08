@@ -50,12 +50,17 @@ class PacketQueue(metaclass=ABCMeta):
         self.nfqueue = NetfilterQueue()
         self.nfqueue.bind(self.queue_number, self.capture)
         try:
+            self.on_bound()
             self.logger.debug('Queue bound to number' + str(self.queue_number) + ' , running queue now')
             self.nfqueue.run()
         except Exception:
             if self.nfqueue:
                 self.nfqueue.unbind()
-            sys.exit(0)
+            raise
+
+    def on_bound(self):
+        """Hook for a queue that must signal readiness before traffic is rerouted."""
+        return None
 
     def db_query(self, query, write=False, parameters=None):
         """

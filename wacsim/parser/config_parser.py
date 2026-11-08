@@ -895,6 +895,7 @@ class SchemaParser:
         }])
 
         config_schema = Schema({
+            Optional('crave_ctown'): dict,
             'plcs': plc_schema,
             'inp_file': Path,
             Optional('network_topology_type', default='simple'): And(
@@ -1283,6 +1284,10 @@ class ConfigParser:
 
         # Parse network events from the config file
         yaml_data["network_events"] = self.generate_network_events()
+
+        if 'crave_ctown' in self.data:
+            from wacsim.replay.full import configure_intermediate
+            configure_intermediate(yaml_data, self.data['crave_ctown'], self.config_path)
 
         # Write data to yaml file
         with self.yaml_path.open(mode='w') as intermediate_yaml:

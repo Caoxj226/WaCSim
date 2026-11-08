@@ -67,6 +67,16 @@ class GenericPLC(BasePLC):
 
         self.intermediate_controls = self.intermediate_plc['controls']
         self.controls = self.create_controls(self.intermediate_controls)
+        self.crave_pi = None
+        self.crave_driver = None
+        if 'crave_ctown_runtime' in self.intermediate_yaml and self.intermediate_plc['name'] == 'PLC5':
+            from wacsim.replay.full import FullPIControl
+            self.crave_pi = FullPIControl(self.intermediate_yaml['crave_ctown_runtime']['config'])
+            for attack in self.intermediate_yaml.get('crave_device_attacks', []):
+                if attack['plc'] == self.intermediate_plc['name']:
+                    from wacsim.replay.device import FullDriverRamp
+                    from wacsim.replay.contract import InjectionSpec
+                    self.crave_driver = FullDriverRamp(InjectionSpec.from_dict(attack['spec']))
         self.mode = self.intermediate_yaml["mode"]
         self.decision_maker = {}
         if 'decision_maker_per_plc' in self.intermediate_yaml:
@@ -626,8 +636,12 @@ class GenericPLC(BasePLC):
                                 control.apply(self)
                             else:
                                 control.applyHybridDecision(self, result, self.scadaCache[f'ScadaCommand_{control.actuator}'])
+            if self.crave_pi is not None:
+                self.crave_pi.apply(self, clock)
             for attack in self.attacks:
                 attack.apply(self)
+            if self.crave_driver is not None:
+                self.crave_driver.apply(self)
             self.logger.debug(f'PLC {self.intermediate_plc["name"]} is finished before time update')
             master_time = datetime.now()
             self.logger.debug(f'PLC {self.intermediate_plc["name"]} is after time update')
@@ -651,6 +665,8 @@ class GenericPLC(BasePLC):
         """
         results = self.write_cache
         results.to_csv(self.output_path, index=False)
+        if self.crave_driver is not None:
+            self.crave_driver.save_echo(self.output_path.parent, self.intermediate_yaml['crave_ctown_runtime'])
 
 
 def is_valid_file(parser_instance, arg):

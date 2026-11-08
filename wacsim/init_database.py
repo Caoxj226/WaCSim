@@ -50,7 +50,10 @@ class DatabaseInitializer:
             if "plcs" in self.data:
                 for plc in self.data["plcs"]:
                     for sensor in plc["sensors"]:
-                        if sensor in self.data["initial_tank_values"]:
+                        if sensor in self.data.get("virtual_tag_initial_values", {}):
+                            cur.execute("INSERT INTO plant VALUES (?, 1, ?);",
+                                        (sensor, self.data["virtual_tag_initial_values"][sensor]))
+                        elif sensor in self.data["initial_tank_values"]:
                             # We only initialize tank levels into the SQlite3 DB
                             cur.execute("INSERT INTO plant VALUES (?, 1, ?);", (sensor,self.data["initial_tank_values"][sensor]))
                         else:
@@ -95,6 +98,8 @@ class DatabaseInitializer:
                             cur.execute("INSERT INTO attack (name, flag) VALUES (?, 0);",
                                         (attack["name"],))
             # Add network attacks to attack table
+            for attack in self.data.get("crave_device_attacks", []):
+                cur.execute("INSERT INTO attack (name, flag) VALUES (?, 0);", (attack["name"],))
             if "network_attacks" in self.data:
                 for network_attack in self.data["network_attacks"]:
                     cur.execute("INSERT INTO attack (name, flag) VALUES (?, 0);",

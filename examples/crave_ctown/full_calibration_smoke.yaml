@@ -1,0 +1,14 @@
+# Development-only candidate: this is not a final calibration or paper result.
+inp_file: ../ctown_topology/ctown_map.inp
+plcs: !include ../ctown_topology/ctown_plcs.yaml
+iterations: 24
+output_path: ../../phase2_environment/full-94-smoke
+network_topology_type: complex
+mode: plccontrol
+demand: pdd
+log_level: info
+saving_interval: 1
+crave_ctown:
+  profile: calibration
+  scenario: scenario.yaml
+  candidate: {sp_m: 2.5, kp: 0.2, ki_per_step: 0.04}

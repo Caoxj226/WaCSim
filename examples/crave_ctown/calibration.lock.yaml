@@ -1,0 +1,52 @@
+schema_version: 1
+kind: calibration_lock
+governance_status: formal_locked_contract
+source_commit: fd404fcf1d12ce72154c207ce59801d3c5cbdfc4
+scenario_sha256: e749d6f712a486514e065f81b63a07835f5e488a38b8c8072c11d258d5059a65
+network_sha256: 221fd75aa1e4828b70e05e69747b41eeba361b111dd40bbeb3084a7bb33f95c1
+implementation_sha256: 602e7c14186d45607d4f6042916d6625c8e40cd826852f0f7af26ba04fed497a
+calibration_protocol_sha256: e08e59ffba7cd094665756733e8114619c30738a91d6ae64bda2d988751628f9
+candidate_configuration_protocol_sha256: 2d8a6e42773999995f5b6b4ae222ac340b84fa1b82bb9a99b81f70a6fc2d0af0
+nominal_setpoint_m: 2.5
+Kp: 0.2
+Ki_per_step: 0.04
+integral_initial: 0.0
+integral_limits_resolved:
+  lower: 0.0
+  upper: 25.0
+theta_m: 1.0123111258725106
+theta_source:
+  method: nearest_rank
+  quantile: 0.999
+  rank_one_based: 6042
+  sample_count: 6048
+  rank_value_m: 1.0123111258725106
+  floor_m: 0.1
+  baseline_alarm_count_strict_gt: 6
+  baseline_alarm_fraction_strict_gt: 0.000992063492063492
+baseline_run_key: rk_bad58efcadd356ab8c306e3dc8c63ae36635e55955d04e7aa6b810592bd1be65
+baseline_trace_sha256: 4d8cb7877b385fcdc296cf768393b21a5969fa2654ddde77a035d3525a7a54dc
+baseline_metrics:
+  qualified: true
+  fail_reasons: []
+  scoring_step_range_inclusive:
+  - 24
+  - 6071
+  T7_min_m: 1.088351135823117
+  tracking_MAE_m: 0.22149809150302757
+  weekly_MAE_m:
+  - 0.21669089261729949
+  - 0.21691487394835182
+  - 0.23088850794343138
+  saturation_fraction: 0.24074074074074073
+  weekly_saturation_fraction:
+  - 0.24305555555555555
+  - 0.23561507936507936
+  - 0.2435515873015873
+  min_junction_pressure_m: 2.968994628836569
+  all_tank_weekly_mean_drift: []
+  tank_bound_violation_count: 0
+  required_pressure_threshold_m: 20.0
+  required_pressure_deficit_sample_count: 36478
+  required_pressure_deficit_fraction: 0.01554488490699831
+phase1_contract_commit: 6afca24c1704c691ca935a07e6511f3cdf620a99

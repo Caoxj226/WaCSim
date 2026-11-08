@@ -58,6 +58,11 @@ class Runner():
         subprocess.run(["sudo", "mn", "-c"])
 
         InputFilesCopier(self.config_file, intermediate_yaml_path).copy_input_files()
+        with intermediate_yaml_path.open() as file:
+            run_data = yaml.safe_load(file)
+        if 'crave_ctown_runtime' in run_data:
+            from wacsim.replay.full import save_full_inputs
+            save_full_inputs(run_data, intermediate_yaml_path)
 
         db_initializer = DatabaseInitializer(intermediate_yaml_path)
         db_initializer.drop()
@@ -68,6 +73,12 @@ class Runner():
         self.automatic_run = subprocess.Popen(
             ["python3", str(automatic_run_path), str(intermediate_yaml_path)])
         self.automatic_run.wait()
+        if 'crave_ctown_runtime' in run_data:
+            from wacsim.replay.full import check_full_completion, evaluate_full_oracle
+            if self.automatic_run.returncode != 0:
+                raise RuntimeError('full CTown network runner failed')
+            check_full_completion(run_data)
+            evaluate_full_oracle(run_data)
 
 def main():
     parser = argparse.ArgumentParser(description='Executes Wacsim based on a config file')

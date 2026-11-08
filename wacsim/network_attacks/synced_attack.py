@@ -282,6 +282,10 @@ class SyncedAttack(metaclass=ABCMeta):
         """
         self.db_query("UPDATE attack SET flag=? WHERE name IS ?", True, (int(flag), self.intermediate_attack['name']))
 
+    def attack_flag_for_clock(self, run: bool) -> bool:
+        """Subclasses may keep a passive transport active before its first edit."""
+        return run
+
     def main_loop(self, start_now=False):
         """
         The main loop of an attack.
@@ -299,7 +303,7 @@ class SyncedAttack(metaclass=ABCMeta):
                 run = self.check_trigger()
 
             # todo: When should we set the flag attack when using Alessandro's concealment attack
-            self.set_attack_flag(run)
+            self.set_attack_flag(self.attack_flag_for_clock(run))
             if self.state == 0:
                 if run:
                     self.state = 1

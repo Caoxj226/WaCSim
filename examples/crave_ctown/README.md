@@ -1,5 +1,7 @@
 # CRAVE × WaCSim：CTown 第一阶段场景契约（送审版）
 
+> **当前状态（2026-11-09）**：场景已锁定，并已依据本地第一阶段提交 `6afca24c1704c691ca935a07e6511f3cdf620a99` 重新生成正式 `calibration.lock.yaml`。9.5 设备 driver、9.6 顺序 masker、9.7 统一 oracle、9.8 正式校准及 9.9/9.10 测试/验收工具均已完成；预热 k=0–23 的 telemetry 保留但正式 score 从 k=24 开始。完整 WaCSim 的无攻击、单 driver、driver+masker 三组差分验收（11.4）尚未运行。下文部分段落记录的是当时的阶段性状态，应以本说明、`scenario.yaml`、锁文件和 `phase2_environment/9.9-9.10最终测试与验收工具.md` 为准。
+
 本目录包含第一阶段场景契约及第二阶段 CTown CRAVE 配置。契约当前状态为 **ready_for_external_review**：尚待评审闭环与 Git 提交。现有 WaCSim CLI 不会直接执行 scenario.yaml；新增 `full_*.yaml` 配置通过 `crave_ctown` 选项读取契约。完整平台已接入 T7SP、共享 PI 与设备 driver ramp；网络 masker 和完整 oracle 待 9.6、9.7 接入。送审并不表示第一阶段已经锁定。
 
 ## 9.4 完整平台场景

@@ -1,0 +1,17 @@
+# Execution also needs step 9.6 network masker; no local SP override is used.
+inp_file: ../ctown_topology/ctown_map.inp
+plcs: !include ../ctown_topology/ctown_plcs.yaml
+iterations: 129
+output_path: ../../results/crave_ctown/full_driver_masker
+network_topology_type: complex
+mode: plccontrol
+demand: pdd
+log_level: info
+saving_interval: 1
+crave_ctown:
+  profile: driver_masker
+  scenario: scenario.yaml
+  calibration_lock: calibration.lock.yaml
+  injections:
+    - {point: PU10_SPEED_CMD, role: driver, slope: -0.01, duration: 5, start_step: 24, range: [0.0, 1.0]}
+    - {point: T7_LEVEL_SP, role: masker, slope: -0.01, duration: 5, start_step: 24, range: [0.0, 5.0]}

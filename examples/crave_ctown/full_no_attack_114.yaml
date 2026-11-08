@@ -1,0 +1,13 @@
+inp_file: ../ctown_topology/ctown_map.inp
+plcs: !include ../ctown_topology/ctown_plcs.yaml
+iterations: 288
+output_path: ../../phase2_environment/11.4-full-no-attack
+network_topology_type: complex
+mode: plccontrol
+demand: pdd
+log_level: info
+saving_interval: 1
+crave_ctown:
+  profile: no_attack
+  scenario: scenario.yaml
+  calibration_lock: calibration.lock.yaml

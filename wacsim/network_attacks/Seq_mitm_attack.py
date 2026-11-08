@@ -10,6 +10,7 @@ from wacsim.network_attacks.synced_attack import SyncedAttack
 import subprocess
 import sys
 import signal
+import json
 
 
 class Error(Exception):
@@ -55,23 +56,50 @@ class SeqMiTMAttack(SyncedAttack):
 
         Finally, it launches the thread that will examine all captured packets.
         """
-        self.modify_ip_tables(True)
         queue_number = self.intermediate_attack['queue_num']
-        # Launch the ARP poison by sending the required ARP network packets
-        self.launch_mitm(get_macs=True)
+        self._start_queue(queue_number)
+        self.modify_ip_tables(True)
+        # The reviewed CTown scene has an explicit Mininet-only route through
+        # this namespace. Older scenarios retain their original ARP workflow.
+        if "crave_masker" not in self.intermediate_attack:
+            self.launch_mitm(get_macs=True)
 
         # In simple topology, start periodic re-poisoning thread to keep ARP cache spoofed
-        if self.intermediate_yaml['network_topology_type'] == "simple":
+        if ("crave_masker" not in self.intermediate_attack
+                and self.intermediate_yaml['network_topology_type'] == "simple"):
             self.run_thread = True
             _thread.start_new_thread(self.refresh_poison, (self.ARP_POISON_PERIOD, self.ARP_POISON_PERIOD))
 
         self.logger.debug(f"MITM Attack ARP Poison between {self.target_plc_ip} and "
                           f"{self.intermediate_attack['gateway_ip']}")
 
+    def _start_queue(self, queue_number):
+        """Bind before ARP/iptables reroute, avoiding a startup packet drop."""
         nfqueue_path = Path(__file__).parent.absolute() / "Seq_mitm_netfilter_queue.py"
-        cmd = ["python3", str(nfqueue_path), str(self.intermediate_yaml_path), str(self.yaml_index), str(queue_number)]
-
+        cmd = ["python3", str(nfqueue_path), str(self.intermediate_yaml_path),
+               str(self.yaml_index), str(queue_number)]
         self.nfqueue_process = subprocess.Popen(cmd, shell=False, stderr=sys.stderr, stdout=sys.stdout)
+        config = self.intermediate_attack.get("crave_masker", {})
+        ready = Path(config.get("ready_file", Path(self.intermediate_yaml["output_path"])
+                                           / f"sequential_mitm_{self.intermediate_attack['name']}.ready.json"))
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            if ready.is_file():
+                received = json.loads(ready.read_text())
+                if (received.get("execution_id") == config.get("execution_id")
+                        and received.get("name") == self.intermediate_attack["name"]):
+                    return
+            if self.nfqueue_process.poll() is not None:
+                raise RuntimeError("sequential MITM queue exited before readiness")
+            time.sleep(.05)
+        raise RuntimeError("sequential MITM queue did not bind within 10 seconds")
+
+    def attack_flag_for_clock(self, run: bool) -> bool:
+        """The queue is passive during warm-up; the flag denotes an actual edit."""
+        config = self.intermediate_attack.get("crave_masker")
+        if not config:
+            return run
+        return run and self.get_master_clock() >= config["spec"]["start_step"]
 
     def refresh_poison(self, period, delay):
         """Periodically re-poison ARP caches to maintain interception in simple topology."""
@@ -118,8 +146,10 @@ class SeqMiTMAttack(SyncedAttack):
         it will delete the iptable rules and stop the thread.
         """
         self.run_thread = False
-        restore_arp(self.target_plc_ip, self.intermediate_attack['gateway_ip'])
-        if self.intermediate_yaml['network_topology_type'] == "simple":
+        if "crave_masker" not in self.intermediate_attack:
+            restore_arp(self.target_plc_ip, self.intermediate_attack['gateway_ip'])
+        if ("crave_masker" not in self.intermediate_attack
+                and self.intermediate_yaml['network_topology_type'] == "simple"):
             for plc in self.intermediate_yaml['plcs']:
                 if plc['name'] != self.intermediate_plc['name']:
                     restore_arp(self.target_plc_ip, plc['local_ip'])
@@ -131,8 +161,10 @@ class SeqMiTMAttack(SyncedAttack):
         self.logger.debug(f"Restored ARP")
 
         self.logger.debug("Stopping nfqueue subprocess...")
+        if self.nfqueue_process is None:
+            return
         self.nfqueue_process.send_signal(signal.SIGINT)
-        self.nfqueue_process.wait()
+        self.nfqueue_process.wait(timeout=10)
         if self.nfqueue_process.poll() is None:
             self.nfqueue_process.terminate()
         if self.nfqueue_process.poll() is None:
