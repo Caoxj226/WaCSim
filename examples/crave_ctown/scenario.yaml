@@ -1,0 +1,285 @@
+schema_version: 1
+scenario_id: crave_ctown_t7_pu10
+status: locked
+source:
+  wacsim_commit: fd404fcf1d12ce72154c207ce59801d3c5cbdfc4
+  network_inp: ../ctown_topology/ctown_map.inp
+  plc_inventory: ../ctown_topology/ctown_plcs.yaml
+  decision_config: ../ctown_topology/ctown_decision_plc.yaml
+  baseline_audit: D:/2026/DockerData/audit/CTown短测试与基线核查.md
+  existing_network_units: LPS
+  runtime_flow_units: CMH
+  flow_conversion:
+    LPS_to_CMH: 3.6
+facts:
+  hydraulic_step_seconds: 300
+  demand_pattern_timestep_seconds: 3600
+  demand_pattern_lengths: {DMA1_pat: 168, DMA2_pat: 168, DMA3_pat: 168, DMA4_pat: 168, DMA5_pat: 168}
+  demand_pattern_period_hours: 168
+  t7_initial_level_m: 2.5
+  t7_level_limits_m: [0.0, 5.0]
+  pu10_link: [J307, J317]
+  pu11_link: [J309, J323]
+  original_pu10_rules:
+    open_below_t7_m: 1.5
+    close_above_t7_m: 4.8
+  original_pu11_rules:
+    open_below_t7_m: 0.5
+    close_above_t7_m: 3.0
+  original_pu10_rule_in_new_scenario: disabled_replaced_by_PI
+  original_pu11_rule_in_new_scenario: retained
+  stock_wacsim_has_T7SP: false
+  stock_wacsim_has_continuous_PI: false
+variables:
+  - id: T7_LEVEL
+    wacsim_tag: T7
+    source: EPANET_node_T7_PRESSURE_as_tank_level
+    unit: m
+    data_type: float64
+    layer: physical_plant
+    engineering_range: [0.0, 5.0]
+    range_status: confirmed_INP
+    attacker_writable: false
+    role: true_process
+  - id: PU10_SPEED_CMD
+    wacsim_tag: PU10
+    source: EPANET_link_PU10_SETTING_after_PLC5_PI
+    unit: relative_speed
+    data_type: float64
+    layer: PLC5_actuator_command
+    engineering_range: [0.0, 1.0]
+    range_status: accepted_for_review
+    attacker_writable: true
+    role: driver
+  - id: T7_LEVEL_SP
+    wacsim_tag: T7SP
+    source: planned_virtual_tag_at_PLC9_read_by_PLC5
+    unit: m
+    data_type: float64
+    layer: SCADA_to_PLC_setpoint
+    engineering_range: [0.0, 5.0]
+    range_status: accepted_for_review
+    attacker_writable: true
+    role: masker
+    nominal_value: null
+    nominal_value_status: to_be_selected_by_no_attack_calibration
+    nominal_candidate_source: calibration.nominal_setpoint_candidates_m
+    distinct_from_existing_T7S_reported_level: true
+  - id: PU10_FLOW
+    wacsim_tag: PU10F
+    source: EPANET_link_PU10_FLOW
+    unit: m3/h
+    data_type: float64
+    layer: physical_plant_observation
+    engineering_range: null
+    range_status: not_applicable_readonly_not_limited
+    range_reason: no_model_engineering_limit_and_not_attack_or_oracle_input
+    baseline_observed_range_post_warmup: [0.0, 118.84839926160713]
+    attacker_writable: false
+    role: readonly_observation
+    ground_truth_column: PU10_FLOW
+  - id: J317_PRESSURE
+    wacsim_tag: J317
+    source: EPANET_node_J317_PRESSURE
+    unit: m_water
+    data_type: float64
+    layer: physical_plant_observation
+    engineering_range: null
+    range_status: not_applicable_readonly_not_limited
+    range_reason: no_model_engineering_limit_and_not_attack_or_oracle_input
+    baseline_observed_range_post_warmup: [57.64473160346292, 75.38517210588351]
+    attacker_writable: false
+    role: readonly_observation
+    ground_truth_column: J317_LEVEL
+control:
+  id: PI-T7-PU10
+  type: discrete_PI
+  measurement_var: T7_LEVEL
+  measurement_source: PLC5_cache_of_PLC9_T7_unattacked
+  setpoint_var: T7_LEVEL_SP
+  output_var: PU10_SPEED_CMD
+  error_formula: effective_T7_LEVEL_SP[k] - PLC5_cached_PLC9_T7[k]
+  formula: u_raw[k] = Kp * e[k] + Ki * I_candidate[k]
+  integral_candidate_formula: I_candidate[k] = clamp(I[k-1] + e[k], integral_limits)
+  integral_initial: 0.0
+  integral_initial_status: fixed_candidate_protocol
+  integral_limits:
+    lower: 0.0
+    upper_formula: 1.0 / Ki_per_step
+  integral_limits_status: fixed_formula_per_candidate
+  integral_gain_convention: Ki_is_per_300_second_step_no_extra_dt_factor
+  integral_gain_conversion: Ki_per_second = Ki_per_step / 300.0
+  output_limits: [0.0, 1.0]
+  anti_windup: conditional_integration
+  anti_windup_rule: if u_raw exceeds upper and e is positive, or falls below lower and e is negative, keep previous I; otherwise accept I_candidate
+  final_output_formula: clamp(Kp * e[k] + Ki * I[k], 0, 1)
+  controller_parameters_source: calibration.lock.yaml
+  original_PU10_rule: disabled
+  original_PU11_rule: retained
+hazards:
+  - id: H-T7-LOW
+    variable: T7_LEVEL
+    comparator: <=
+    threshold: 0.5
+    unit: m
+    boundary_inclusive: true
+    dwell_steps: 1
+    margin_formula: T7_LEVEL - 0.5
+    margin_sign: positive_safe_zero_and_negative_hazard
+    observation: true_hydraulic_state_after_step
+alarms:
+  - id: A-T7-TRACK
+    process_var: T7_LEVEL
+    setpoint_var: T7_LEVEL_SP
+    residual_formula: abs(T7_LEVEL_SP - T7_LEVEL)
+    comparator: ">"
+    threshold_source: calibration.lock.yaml
+    threshold_algorithm:
+      baseline_residual: abs(T7_LEVEL_SP - T7_LEVEL)
+      window: after_24_warmup_steps_next_6048_steps
+      sample_count: 6048
+      window_status: proposed_multicycle_v2
+      empirical_quantile: 0.999
+      quantile_method: nearest_rank
+      quantile_method_status: approved_external_review_2026-11-08
+      floor_m: 0.1
+      formula: theta = max(nearest_rank_q99_9, 0.1)
+    margin_formula: theta - abs(T7_LEVEL_SP - T7_LEVEL)
+    margin_sign: negative_alarm_zero_no_alarm_positive_safe
+    monitor_only: true
+    protective_action: none
+    observation: post_hydraulic_true_T7_and_effective_setpoint
+    measurement_T7_used_for_alarm: false
+attack:
+  model: synchronous_ramp_hold
+  first_attacked_step_increment: 0
+  base_capture: once_from_unmodified_context_at_first_attacked_step_for_each_variable
+  formula: value[k] = clamp(base + slope * min(k - start_step, duration_steps - 1), engineering_range)
+  before_start: no_override
+  after_duration: hold_clamped_terminal_value_through_last_step
+  driver:
+    variable: PU10_SPEED_CMD
+    role: driver
+    injection_phase: after_PI_before_EPANET
+    slope_range_per_step: [-0.05, -0.001]
+  masker:
+    variable: T7_LEVEL_SP
+    role: masker
+    injection_phase: before_PI
+    slope_range_per_step: [-0.05, -0.001]
+  synchronisation: same_start_step_and_duration_for_both_in_dual_attack
+  single_driver_mode: masker_disabled
+time:
+  index_base: zero
+  step_meaning: k_is_transition_from_state_k_to_state_k_plus_1
+  initial_state: state_0_not_an_attack_or_score_row
+  hydraulic_step_seconds: 300
+  warmup_steps: 24
+  warmup_transition_range_inclusive: [0, 23]
+  first_attack_transition: 24
+  duration_steps: {min: 5, max: 120, inclusive: true}
+  postattack_observation_steps: 100
+  attacked_transition_range: start_step_through_start_step_plus_duration_minus_1
+  postattack_transition_range: next_100_transitions_after_duration
+  total_transitions_formula: start_step + duration_steps + postattack_observation_steps
+  total_transitions_range: [129, 244]
+  calibration_transitions: 6072
+  calibration_scoring_transitions: [24, 6071]
+  calibration_schedule_status: approved_external_review_2026-11-08
+  output_row_index: zero_based_transition_index_k
+  output_state_index: k_plus_1
+step_order:
+  - read_unattacked_PLC5_cache_of_PLC9_T7_and_unmodified_nominal_setpoint_at_step_k
+  - capture_masker_base_once_then_apply_masker_before_PI
+  - compute_PI_and_capture_driver_base_once_from_unmodified_PI_output
+  - apply_driver_after_PI_and_clamp
+  - advance_EPANET_one_300_second_transition
+  - evaluate_alarm_and_hazard_on_state_k_plus_1_using_effective_setpoint
+  - emit_row_k_and_first_trigger_metadata
+tie:
+  prehazard_alarm_definition: alarm_row_index_strictly_less_than_first_hazard_row_index
+  same_step_alarm_and_hazard: not_prehazard_alarm
+  hazard_reached_if_no_alarm_before_hazard: true
+  alarm_before_hazard_if_same_step_only: false
+calibration:
+  no_attack: true
+  baseline_nominal_setpoint_m: null
+  baseline_nominal_setpoint_status: to_be_selected_by_no_attack_calibration
+  nominal_setpoint_candidates_m: [2.5, 3.0, 3.5]
+  nominal_setpoint_selection: first_candidate_in_declared_order_with_qualifying_PI
+  nominal_setpoint_selection_status: approved_external_review_2026-11-08
+  configuration_protocol: SP与PI候选配置.md
+  protocol_readiness: approved_external_review_2026-11-08
+  warmup_steps_excluded: 24
+  demand_cycle_steps: 2016
+  demand_cycles_to_run: 3
+  scored_sample_count: 6048
+  multicycle_protocol:
+    document: 多周期校准方案_v2.md
+    status: approved_external_review_2026-11-08
+    period_source: original_INP_168_hour_patterns_not_24_hour_run_duration
+    cycle_ranges_inclusive: [[24, 2039], [2040, 4055], [4056, 6071]]
+    reset_state_between_cycles: false
+    fail_on_missing_nonfinite_or_unconverged_data: true
+    no_hazard_during_warmup: true
+    tank_bounds_source: INP_all_tanks
+    tank_bound_numeric_tolerance_m: 0.000001
+    minimum_junction_pressure_source: INP_MINIMUM_PRESSURE
+    pressure_numeric_tolerance_m: 0.000001
+    pressure_check_window: post_warmup_all_cycles
+    saturation_limit_applies_to: whole_scoring_window_and_each_cycle
+    tracking_MAE_limit_m: 0.25
+    tracking_limit_applies_to: whole_scoring_window_and_each_cycle
+    stability_compare_cycles: [2, 3]
+    all_tank_weekly_mean_difference_limit_fraction_of_span: 0.05
+    all_tank_weekly_mean_difference_applies_to: cycles_2_and_3
+    pointwise_phase_and_weekly_extrema: diagnostic_only_not_qualification
+    each_junction_weekly_mean_pressure_difference: diagnostic_only_not_qualification
+    record_required_pressure_deficits_without_claiming_service_compliance: true
+  candidate_grid:
+    Kp: [0.2, 0.4, 0.8, 1.2]
+    Ki_per_step: [0.005, 0.01, 0.02, 0.04]
+    order: Kp_ascending_then_Ki_ascending
+    status: fixed_before_no_attack_calibration
+  candidates_per_setpoint: 16
+  maximum_candidate_count: 48
+  eliminate_if_hazard_in_scoring_window: true
+  saturation_definition: output_at_0_or_1_after_clamp
+  saturation_numeric_tolerance: 0.0
+  eliminate_if_saturation_fraction_strictly_greater_than: 0.25
+  choose_remaining_by: minimum_T7_tracking_MAE_within_first_qualifying_setpoint
+  tie_break: lower_Kp_then_lower_Ki
+  if_no_candidate_survives: stop_and_revise_phase1_contract_with_new_review
+  alarm_threshold_from_selected_baseline: true
+  lock_file: calibration.lock.yaml
+  lock_required_for_formal_replay: true
+  lock_fields:
+    - scenario_sha256
+    - network_sha256
+    - source_commit
+    - implementation_sha256
+    - nominal_setpoint_m
+    - Kp
+    - Ki_per_step
+    - integral_initial
+    - integral_limits_resolved
+    - theta_m
+    - baseline_run_key
+    - baseline_metrics
+    - calibration_protocol_sha256
+  lock_invalidation: any_change_to_scenario_INP_control_implementation_or_lock_hash_rejects_formal_replay
+gates:
+  review_package_may_be_parsed: true
+  formal_replay_requires_reviewed_locked_contract_and_calibration_lock: true
+  phase1_review_and_independent_commit_required: true
+review:
+  status: approved_external_review_2026-11-08
+  reviewer: non_author_reviewer_师兄_via_user
+  approved_items:
+    - T7_PU10_T7SP_alarm_and_hazard_contract
+    - three_week_calibration_48_candidate_grid_SP_priority_and_tiebreak
+    - nearest_rank_q99_9_theta
+    - junction_pressure_below_20_m_is_diagnostic_minimum_pressure_0_m_is_hard
+    - lock_scenario_and_regenerate_formal_calibration_lock
+  independent_phase1_commit_required_before_formal_lock: true
+review_required: []
