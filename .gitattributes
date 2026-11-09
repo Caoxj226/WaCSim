@@ -1,2 +1,35 @@
-# Declare files that will always have CRLF line endings on checkout.
+# Declare files that will always have LF line endings on checkout.
 *.sln text eol=lf
+
+# The reviewed CTown replay evidence validates these files by their exact
+# bytes.  Keep the accepted bytes in Git and disable every checkout-time
+# newline conversion on each lock-sensitive input and implementation file.
+examples/crave_ctown/scenario.yaml -text
+examples/crave_ctown/calibration.lock.yaml -text
+examples/ctown_topology/ctown_map.inp -text
+examples/ctown_topology/ctown_plcs.yaml -text
+wacsim/replay/contract.py -text
+wacsim/replay/control.py -text
+wacsim/replay/injections.py -text
+wacsim/replay/oracle.py -text
+wacsim/replay/trace.py -text
+wacsim/replay/calibration.py -text
+wacsim/replay/scenario.py -text
+wacsim/replay/engine.py -text
+wacsim/replay/cli.py -text
+wacsim/replay/full.py -text
+wacsim/replay/device.py -text
+wacsim/replay/legacy.py -text
+wacsim/replay/network.py -text
+wacsim/init_database.py -text
+wacsim/parser/config_parser.py -text
+wacsim/python2/generic_plc.py -text
+wacsim/physical_process.py -text
+wacsim/command_line.py -text
+wacsim/python2/entities/control.py -text
+wacsim/network_attacks/Seq_mitm_attack.py -text
+wacsim/network_attacks/Seq_mitm_netfilter_queue.py -text
+wacsim/network_attacks/mitm_netfilter_queue_subprocess.py -text
+wacsim/network_attacks/synced_attack.py -text
+wacsim/python2/automatic_attacker.py -text
+wacsim/python2/topo/complex_topo.py -text
