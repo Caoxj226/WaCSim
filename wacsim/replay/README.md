@@ -83,12 +83,12 @@ print(task.run_key)
 在 PowerShell 中运行合约检查：
 
 ```powershell
-docker run --rm --entrypoint python3 --mount "type=bind,source=D:\2026\WaCSim,target=/wacsim,readonly" -w /wacsim wacsim:fd404fc -m pytest -q -p no:cacheprovider wacsim/tests/replay/test_contract.py
+docker run --rm --entrypoint python3 --mount "type=bind,source=$env:WACSIM_ROOT,target=/wacsim,readonly" -w /wacsim wacsim:fd404fc -m pytest -q -p no:cacheprovider wacsim/tests/replay/test_contract.py
 ```
 
 检查采用人工构造的轨迹，验证序列化、任务标识、参数拒绝、无攻击校准入口、完整性、回显和同一步计分规则；不作为 EPANET、PI 或完整第二阶段验收证据。
 
-2026-11-07：在现有 `wacsim:fd404fc` 镜像中检查通过，`33 passed`。报告为 `D:\2026\WaCSim\phase2_environment\phase2-contract-pytest.txt`。
+2026-11-07：在现有 `wacsim:fd404fc` 镜像中检查通过，`33 passed`。报告为 `$WACSIM_ROOT/phase2_environment/phase2-contract-pytest.txt`。
 
 ## 快速 EPANET 无攻击回放（2026-11-08）
 
@@ -97,14 +97,14 @@ docker run --rm --entrypoint python3 --mount "type=bind,source=D:\2026\WaCSim,ta
 首次短测试可用以下命令，数字仅是候选示例，输出不是校准锁：
 
 ```powershell
-docker run --rm --mount "type=bind,source=D:\2026\WaCSim,target=/wacsim" -w /wacsim wacsim:fd404fc python3 -m wacsim.replay.fast_epanet --inp examples/ctown_topology/ctown_map.inp --scenario examples/crave_ctown/scenario.yaml --sp 2.5 --kp 0.4 --ki 0.01 --steps 24 --output phase2_environment/fast-replay-smoke.json
+docker run --rm --mount "type=bind,source=$env:WACSIM_ROOT,target=/wacsim" -w /wacsim wacsim:fd404fc python3 -m wacsim.replay.fast_epanet --inp examples/ctown_topology/ctown_map.inp --scenario examples/crave_ctown/scenario.yaml --sp 2.5 --kp 0.4 --ki 0.01 --steps 24 --output phase2_environment/fast-replay-smoke.json
 ```
 
 输出同时包含 ReplayTask 和 ReplayResult，结果会经过 `validate_for`。当前 theta 尚未计算，所以 `alarm_rule_ids` 为空，`meta.alarm_status=theta_not_calibrated`；不能据此判定“无报警”。危害按真实 T7<=0.5 m 记录。水箱液位和最小节点压力每步记录，`--network-detail` 可保存每个 junction 的压力，用于后续全网稳定性统计。48 组候选已按 v2 做探索性多周期筛选；攻击注入代码已实现并用内部任务测试。正式阈值计算、校准锁与完整 WaCSim 一致性比对属于后续工作。
 
 本机代码已通过语法检查；2026-11-08 Docker Desktop 改由既有 D 盘脚本启动后，已完成 24 步 EPANET 短测试。
 
-2026-11-08 后续验证：改用既有 D 盘启动脚本后 Docker 恢复。示例 24 步回放成功，输出见 `D:\2026\WaCSim\phase2_environment\fast-replay-smoke-verified.json`。固定泵速对照和 EPANET 原生报告确认，低速非零命令未产生流量是 PU10 无法提供所需扬程；约 0.6 的速度开始有流量，随系统工况变化。详细证据见 `D:\2026\WaCSim\phase2_environment\PU10快速回放正确性核查.md`。快速回放现记录 EPANET 报告的警告条数及例子。仍须完成正式校准和完整 WaCSim 对照。
+2026-11-08 后续验证：改用既有 D 盘启动脚本后 Docker 恢复。示例 24 步回放成功，输出见 `$WACSIM_ROOT/phase2_environment/fast-replay-smoke-verified.json`。固定泵速对照和 EPANET 原生报告确认，低速非零命令未产生流量是 PU10 无法提供所需扬程；约 0.6 的速度开始有流量，随系统工况变化。详细证据见 `$WACSIM_ROOT/phase2_environment/PU10快速回放正确性核查.md`。快速回放现记录 EPANET 报告的警告条数及例子。仍须完成正式校准和完整 WaCSim 对照。
 
 ## 9.3 当前模块与验证（2026-11-08）
 
@@ -119,9 +119,9 @@ docker run --rm --mount "type=bind,source=D:\2026\WaCSim,target=/wacsim" -w /wac
 统一入口示例（现有八步无攻击测试任务）：
 
 ```powershell
-docker run --rm --entrypoint python3 --mount "type=bind,source=D:\2026\WaCSim,target=/wacsim" -w /wacsim wacsim:fd404fc -m wacsim.replay.cli --task phase2_environment/phase2-93-cli-task.json --config phase2_environment/phase2-93-cli-config.json --inp examples/ctown_topology/ctown_map.inp --scenario examples/crave_ctown/scenario.yaml --output phase2_environment/phase2-93-cli-result.json
+docker run --rm --entrypoint python3 --mount "type=bind,source=$env:WACSIM_ROOT,target=/wacsim" -w /wacsim wacsim:fd404fc -m wacsim.replay.cli --task phase2_environment/phase2-93-cli-task.json --config phase2_environment/phase2-93-cli-config.json --inp examples/ctown_topology/ctown_map.inp --scenario examples/crave_ctown/scenario.yaml --output phase2_environment/phase2-93-cli-result.json
 ```
 
 任务文件带场景、网络、代码与配置指纹；改动这些文件后须重新生成任务，旧任务被拒绝。测试采用候选参数和人工指定的 theta 检查功能，不生成研究结果；正式攻击任务必须等待场景状态 `locked` 且存在匹配的 `calibration.lock.yaml`。无攻击校准任务可以在无锁条件下运行。
 
-2026-11-08：合约、PI 防饱和、ramp 边界、同一步计分、真实 EPANET 单点/双点攻击顺序与重复性共 42 项检查通过。统一 CLI 的八步无攻击运行成功；未锁定场景的正式攻击 CLI 返回 `status=error`、零轨迹和明确的校准锁错误。模块化前后 24 步无攻击关键水力数值逐项一致。CRAVE 原评分器可读取当前 rows 并得到相同首次触发字段。逐条状态见 `D:\2026\WaCSim\phase2_environment\9.3交接文档逐条核查.md`；后续 9.4–9.7 还须在完整 WaCSim 中复用并对照这些规则，9.8 才正式计算 theta 并生成校准锁。
+2026-11-08：合约、PI 防饱和、ramp 边界、同一步计分、真实 EPANET 单点/双点攻击顺序与重复性共 42 项检查通过。统一 CLI 的八步无攻击运行成功；未锁定场景的正式攻击 CLI 返回 `status=error`、零轨迹和明确的校准锁错误。模块化前后 24 步无攻击关键水力数值逐项一致。CRAVE 原评分器可读取当前 rows 并得到相同首次触发字段。逐条状态见 `$WACSIM_ROOT/phase2_environment/9.3交接文档逐条核查.md`；后续 9.4–9.7 还须在完整 WaCSim 中复用并对照这些规则，9.8 才正式计算 theta 并生成校准锁。
